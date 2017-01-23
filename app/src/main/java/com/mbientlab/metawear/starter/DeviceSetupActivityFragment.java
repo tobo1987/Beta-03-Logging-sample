@@ -46,15 +46,20 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.UnsupportedModuleException;
 import com.mbientlab.metawear.android.BtleService;
 import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.EulerAngle;
 import com.mbientlab.metawear.data.FloatVector;
+import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.SensorFusionBosch;
+import com.mbientlab.metawear.module.Timer;
 
 import java.util.Calendar;
+
+import bolts.Task;
 
 /**
  * A placeholder fragment containing a simple view.
@@ -66,8 +71,11 @@ public class DeviceSetupActivityFragment extends Fragment implements ServiceConn
 
     private MetaWearBoard mwBoard= null;
     private FragmentSettings settings;
-    private SensorFusionBosch sensorFusion;
     private Logging logging;
+    private Gpio gpio;
+    private Timer timer;
+    private SensorFusionBosch sensorFusion;
+    private Timer.ScheduledTask scheduledTask;
 
     public DeviceSetupActivityFragment() {
     }
@@ -103,18 +111,26 @@ public class DeviceSetupActivityFragment extends Fragment implements ServiceConn
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         view.findViewById(R.id.start).setOnClickListener(v -> {
+            logging.clearEntries();
             logging.start(false);
-            sensorFusion.linearAcceleration().start();
             sensorFusion.eulerAngles().start();
+            sensorFusion.linearAcceleration().start();
             sensorFusion.start();
+            //if(scheduledTask != null)
+                scheduledTask.start();
+            //else
+            //    Log.i("Info","ScheduleTask == null");
         });
 
         view.findViewById(R.id.stop).setOnClickListener(v -> {
             logging.stop();
-            sensorFusion.linearAcceleration().stop();
-            sensorFusion.eulerAngles().stop();
             sensorFusion.stop();
-
+            sensorFusion.eulerAngles().stop();
+            sensorFusion.linearAcceleration().stop();
+            if(scheduledTask != null)
+                scheduledTask.stop();
+            else
+                Log.i("Info","ScheduleTask == null");
             logging.download().continueWith(ignored ->
                     Log.i("HAND RIGHT", "Log download complete"));
         });
@@ -141,30 +157,38 @@ public class DeviceSetupActivityFragment extends Fragment implements ServiceConn
      */
     public void ready() {
 
+        mwBoard.tearDown();
+        logging = mwBoard.getModule(Logging.class);
+        gpio = mwBoard.getModule(Gpio.class);
+        timer = mwBoard.getModule(Timer.class);
         sensorFusion = mwBoard.getModule(SensorFusionBosch.class);
+
         sensorFusion.configure().mode(SensorFusionBosch.Mode.NDOF).
                 accRange(SensorFusionBosch.AccRange.AR_2G).
                 gyroRange(SensorFusionBosch.GyroRange.GR_250DPS).commit();
 
-        sensorFusion.linearAcceleration().addRoute(source ->
-                source.log((msg, env) -> {
-                    Acceleration e = msg.value(Acceleration.class);
-
-                    Calendar c = msg.timestamp();
-                    Log.i("HAND RIGHT", "Accel " + msg.timestamp().getTime() + e);
-                })
-        );
-
         sensorFusion.eulerAngles().addRoute(source ->
                 source.log((msg, env) -> {
                     EulerAngle e = msg.value(EulerAngle.class);
-
                     Calendar c = msg.timestamp();
-                    Log.i("HAND RIGHT", "EULER " + msg.timestamp().getTime() + e);
-                })
-        );
-
-        logging = mwBoard.getModule(Logging.class);
+                    Log.i("FOOT LEFT", "EULER " + msg.timestamp().getTime() + e);
+                }))
+        .onSuccessTask(task -> sensorFusion.linearAcceleration().addRoute(source ->
+                source.log((msg, env) -> {
+                    Acceleration a = msg.value(Acceleration.class);
+                    Calendar c = msg.timestamp();
+                    Log.i("FOOT LEFT", "Accel " + msg.timestamp().getTime() + a);
+                })))
+        .onSuccessTask(task ->
+            gpio.getPin((byte) 0).analogAdc().addRoute(source -> source.log(
+                    (data, env) -> Log.i("GPIO 0", "" + data.value(Short.class))))
+            .onSuccessTask(ignored -> gpio.getPin((byte) 1).analogAdc().addRoute(source -> source.log(
+                    (data, env) -> Log.i("GPIO 1", "" + data.value(Short.class)))))
+            .onSuccessTask(ignored -> mwBoard.getModule(Timer.class).schedule(33, false, () -> {
+                gpio.getPin((byte) 0).analogAdc().read();
+                gpio.getPin((byte) 1).analogAdc().read();
+        }).onSuccess(task1 -> {scheduledTask = task1.getResult(); return null;}))
+        ).onSuccess(task -> task.getResult());
 
     }
 }
