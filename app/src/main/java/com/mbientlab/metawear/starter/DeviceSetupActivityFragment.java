@@ -52,6 +52,7 @@ import com.mbientlab.metawear.data.Acceleration;
 import com.mbientlab.metawear.data.CartesianAxis;
 import com.mbientlab.metawear.data.EulerAngle;
 import com.mbientlab.metawear.data.FloatVector;
+import com.mbientlab.metawear.data.Quaternion;
 import com.mbientlab.metawear.module.Gpio;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.SensorFusionBosch;
@@ -115,11 +116,12 @@ public class DeviceSetupActivityFragment extends Fragment implements ServiceConn
             logging.start(false);
             sensorFusion.eulerAngles().start();
             sensorFusion.linearAcceleration().start();
+            sensorFusion.quaternion().start();
             sensorFusion.start();
-            //if(scheduledTask != null)
+            if(scheduledTask!=null)
                 scheduledTask.start();
-            //else
-            //    Log.i("Info","ScheduleTask == null");
+            else
+                Log.e("Error: ","ScheduleTask == null");
         });
 
         view.findViewById(R.id.stop).setOnClickListener(v -> {
@@ -127,10 +129,11 @@ public class DeviceSetupActivityFragment extends Fragment implements ServiceConn
             sensorFusion.stop();
             sensorFusion.eulerAngles().stop();
             sensorFusion.linearAcceleration().stop();
+            sensorFusion.quaternion().stop();
             if(scheduledTask != null)
                 scheduledTask.stop();
             else
-                Log.i("Info","ScheduleTask == null");
+                Log.e("Error: ","ScheduleTask == null");
             logging.download().continueWith(ignored ->
                     Log.i("HAND RIGHT", "Log download complete"));
         });
@@ -173,22 +176,48 @@ public class DeviceSetupActivityFragment extends Fragment implements ServiceConn
                     Calendar c = msg.timestamp();
                     Log.i("FOOT LEFT", "EULER " + msg.timestamp().getTime() + e);
                 }))
-        .onSuccessTask(task -> sensorFusion.linearAcceleration().addRoute(source ->
+        .continueWith(task ->  {
+            Log.i("Results TASK 1: ", "=====================");
+            Log.i("Results error: ", ""+task.getError());
+            Log.i("Results result: ", ""+ task.getResult());
+            Log.i("Results isCancel: ", ""+task.isCancelled());
+            Log.i("Results iscomplete: ", ""+task.isCompleted());
+            Log.i("Results isFault: ", ""+task.isFaulted());
+            return task.getResult();
+        })
+        .continueWithTask(task -> sensorFusion.linearAcceleration().addRoute(source ->
                 source.log((msg, env) -> {
                     Acceleration a = msg.value(Acceleration.class);
                     Calendar c = msg.timestamp();
                     Log.i("FOOT LEFT", "Accel " + msg.timestamp().getTime() + a);
-                })))
-        .onSuccessTask(task ->
-            gpio.getPin((byte) 0).analogAdc().addRoute(source -> source.log(
-                    (data, env) -> Log.i("GPIO 0", "" + data.value(Short.class))))
-            .onSuccessTask(ignored -> gpio.getPin((byte) 1).analogAdc().addRoute(source -> source.log(
-                    (data, env) -> Log.i("GPIO 1", "" + data.value(Short.class)))))
-            .onSuccessTask(ignored -> mwBoard.getModule(Timer.class).schedule(33, false, () -> {
-                gpio.getPin((byte) 0).analogAdc().read();
-                gpio.getPin((byte) 1).analogAdc().read();
-        }).onSuccess(task1 -> {scheduledTask = task1.getResult(); return null;}))
-        ).onSuccess(task -> task.getResult());
+                }))
+                .continueWith(task1 ->  {
+                Log.i("Results TASK 2: ", "=====================");
+                Log.i("Results error: ", ""+task1.getError());
+                Log.i("Results result: ", ""+ task1.getResult());
+                Log.i("Results isCancel: ", ""+task1.isCancelled());
+                Log.i("Results iscomplete: ", ""+task1.isCompleted());
+                Log.i("Results isFault: ", ""+task1.isFaulted());
+                return task1.getResult();
+                })
+                .continueWithTask(task2 ->
+                        gpio.getPin((byte) 0).analogAdc().addRoute(source -> source.log(
+                        (data, env) -> Log.i("GPIO 0", "" + data.value(Short.class)))))
+                .onSuccessTask(ignored -> gpio.getPin((byte) 1).analogAdc().addRoute(source -> source.log(
+                        (data, env) -> Log.i("GPIO 1", "" + data.value(Short.class)))))
+                .onSuccessTask(ignored -> mwBoard.getModule(Timer.class).schedule(33, false, () -> {
+                        gpio.getPin((byte) 0).analogAdc().read();
+                        gpio.getPin((byte) 1).analogAdc().read();
+                }))
+                .continueWith(task1 -> {
+                        Log.i("Results TASK 3: ", "=====================");
+                        Log.i("Results error: ", ""+task1.getError());
+                        Log.i("Results result: ", ""+task1.getResult());
+                        Log.i("Results isCancel: ", ""+task1.isCancelled());
+                        Log.i("Results iscomplete: ", ""+task1.isCompleted());
+                        Log.i("Results isFault: ", ""+task1.isFaulted());
+                        return null;
+        }));
 
     }
 }
