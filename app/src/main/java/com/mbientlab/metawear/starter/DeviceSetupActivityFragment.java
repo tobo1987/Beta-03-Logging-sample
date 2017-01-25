@@ -185,39 +185,39 @@ public class DeviceSetupActivityFragment extends Fragment implements ServiceConn
             Log.i("Results isFault: ", ""+task.isFaulted());
             return task.getResult();
         })
-        .continueWithTask(task -> sensorFusion.linearAcceleration().addRoute(source ->
+        .onSuccessTask(task ->  sensorFusion.linearAcceleration().addRoute(source ->
                 source.log((msg, env) -> {
                     Acceleration a = msg.value(Acceleration.class);
                     Calendar c = msg.timestamp();
                     Log.i("FOOT LEFT", "Accel " + msg.timestamp().getTime() + a);
-                }))
-                .continueWith(task1 ->  {
-                Log.i("Results TASK 2: ", "=====================");
-                Log.i("Results error: ", ""+task1.getError());
-                Log.i("Results result: ", ""+ task1.getResult());
-                Log.i("Results isCancel: ", ""+task1.isCancelled());
-                Log.i("Results iscomplete: ", ""+task1.isCompleted());
-                Log.i("Results isFault: ", ""+task1.isFaulted());
-                return task1.getResult();
-                })
-                .continueWithTask(task2 ->
-                        gpio.getPin((byte) 0).analogAdc().addRoute(source -> source.log(
-                        (data, env) -> Log.i("GPIO 0", "" + data.value(Short.class)))))
-                .onSuccessTask(ignored -> gpio.getPin((byte) 1).analogAdc().addRoute(source -> source.log(
-                        (data, env) -> Log.i("GPIO 1", "" + data.value(Short.class)))))
-                .onSuccessTask(ignored -> mwBoard.getModule(Timer.class).schedule(33, false, () -> {
-                        gpio.getPin((byte) 0).analogAdc().read();
-                        gpio.getPin((byte) 1).analogAdc().read();
-                }))
-                .continueWith(task1 -> {
-                        Log.i("Results TASK 3: ", "=====================");
-                        Log.i("Results error: ", ""+task1.getError());
-                        Log.i("Results result: ", ""+task1.getResult());
-                        Log.i("Results isCancel: ", ""+task1.isCancelled());
-                        Log.i("Results iscomplete: ", ""+task1.isCompleted());
-                        Log.i("Results isFault: ", ""+task1.isFaulted());
-                        return null;
-        }));
+                })))
+        .continueWith(task ->  {
+        Log.i("Results TASK 2: ", "=====================");
+        Log.i("Results error: ", ""+task.getError());
+        Log.i("Results result: ", ""+ task.getResult());
+        Log.i("Results isCancel: ", ""+task.isCancelled());
+        Log.i("Results iscomplete: ", ""+task.isCompleted());
+        Log.i("Results isFault: ", ""+task.isFaulted());
+        return task.getResult();
+        })
+        .onSuccessTask(task ->
+                gpio.getPin((byte) 0).analogAdc().addRoute(source -> source.log(
+                (data, env) -> Log.i("GPIO 0", "" + data.value(Short.class)))))
+        .onSuccessTask(ignored -> gpio.getPin((byte) 1).analogAdc().addRoute(source -> source.log(
+                (data, env) -> Log.i("GPIO 1", "" + data.value(Short.class)))))
+        .onSuccessTask(ignored -> mwBoard.getModule(Timer.class).schedule(33, false, () -> {
+                gpio.getPin((byte) 0).analogAdc().read();
+                gpio.getPin((byte) 1).analogAdc().read();
+        }))
+        .continueWith(task -> {
+                Log.i("Results TASK 3: ", "=====================");
+                Log.i("Results error: ", ""+task.getError());
+                Log.i("Results result: ", ""+task.getResult());
+                Log.i("Results isCancel: ", ""+task.isCancelled());
+                Log.i("Results iscomplete: ", ""+task.isCompleted());
+                Log.i("Results isFault: ", ""+task.isFaulted());
+                return task;
+        });
 
     }
 }
